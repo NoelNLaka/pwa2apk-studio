@@ -1,0 +1,7 @@
+{
+  "name": "PWA2APK Studio",
+  "description": "Convert any Progressive Web App into a ready-to-install Android APK bundle with manifest analysis and automated build logs.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

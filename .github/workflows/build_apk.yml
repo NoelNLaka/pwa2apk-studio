@@ -1,0 +1,53 @@
+name: Build APK from PWA
+
+on:
+  repository_dispatch:
+    types: [build-apk]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Bubblewrap
+        run: npm install -g @bubblewrap/cli
+
+      - name: Initialize and Build TWA
+        run: |
+          mkdir pwa-project
+          cd pwa-project
+          
+          # Initialize project using the provided URL
+          # We use --skipInteractions to accept defaults where possible
+          # Note: In a real scenario, we might want to pass more specific flags or generate the manifest manually
+          bubblewrap init --manifest ${{ github.event.client_payload.url }} --directory . --skipInteractions
+          
+          # Build the APK
+          bubblewrap build --skipInteractions
+
+      - name: Sign APK (Debug for now)
+        # Bubblewrap build usually produces a signed APK if keystore is provided, 
+        # or an update-signed one. For this demo we'll just grab the output.
+        run: |
+          echo "Build complete. Listing files:"
+          ls -R
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release
+          path: pwa-project/*.apk
+          retention-days: 1
