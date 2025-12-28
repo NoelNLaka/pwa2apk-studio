@@ -29,25 +29,32 @@ jobs:
         run: |
           mkdir pwa-project
           cd pwa-project
-          
-          # Initialize project using the provided URL
-          # We use --skipInteractions to accept defaults where possible
-          # Note: In a real scenario, we might want to pass more specific flags or generate the manifest manually
-          bubblewrap init --manifest ${{ github.event.client_payload.url }} --directory . --skipInteractions
-          
-          # Build the APK
-          bubblewrap build --skipInteractions
 
-      - name: Sign APK (Debug for now)
-        # Bubblewrap build usually produces a signed APK if keystore is provided, 
-        # or an update-signed one. For this demo we'll just grab the output.
+          echo "Initializing TWA for URL: ${{ github.event.client_payload.url }}"
+
+          # Initialize project using the provided URL
+          # Use --url flag to specify the PWA URL (not --manifest)
+          bubblewrap init --url "${{ github.event.client_payload.url }}" || {
+            echo "Bubblewrap init failed. Trying with manifest detection..."
+            bubblewrap init --manifest "${{ github.event.client_payload.url }}/manifest.json"
+          }
+
+          echo "Building APK..."
+          # Build the APK
+          bubblewrap build
+
+      - name: List Build Output
         run: |
-          echo "Build complete. Listing files:"
-          ls -R
+          echo "Build complete. Listing APK files:"
+          find pwa-project -name "*.apk" -type f
+          ls -lah pwa-project/
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-release
-          path: pwa-project/*.apk
+          path: |
+            pwa-project/**/*.apk
+            pwa-project/app-release-signed.apk
           retention-days: 1
+          if-no-files-found: warn
