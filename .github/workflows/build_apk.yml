@@ -35,10 +35,43 @@ jobs:
           echo "Package name: $PACKAGE_NAME"
           echo "App name: $APP_NAME"
 
-          # Create placeholder icons using ImageMagick
+          # Install Pillow for icon generation
+          pip3 install Pillow
+
+          # Create placeholder icons using Python/Pillow
           mkdir -p manifest-server
-          convert -size 192x192 xc:#4f46e5 -gravity center -pointsize 48 -fill white -annotate +0+0 "PWA" manifest-server/icon-192.png
-          convert -size 512x512 xc:#4f46e5 -gravity center -pointsize 128 -fill white -annotate +0+0 "PWA" manifest-server/icon-512.png
+          python3 << 'PYSCRIPT'
+from PIL import Image, ImageDraw, ImageFont
+
+# Create 192x192 icon
+img192 = Image.new('RGB', (192, 192), color='#4f46e5')
+draw192 = ImageDraw.Draw(img192)
+try:
+    font192 = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 48)
+except:
+    font192 = ImageFont.load_default()
+text = "PWA"
+bbox = draw192.textbbox((0, 0), text, font=font192)
+text_width = bbox[2] - bbox[0]
+text_height = bbox[3] - bbox[1]
+draw192.text(((192-text_width)/2, (192-text_height)/2), text, fill='white', font=font192)
+img192.save('manifest-server/icon-192.png')
+
+# Create 512x512 icon
+img512 = Image.new('RGB', (512, 512), color='#4f46e5')
+draw512 = ImageDraw.Draw(img512)
+try:
+    font512 = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 128)
+except:
+    font512 = ImageFont.load_default()
+bbox = draw512.textbbox((0, 0), text, font=font512)
+text_width = bbox[2] - bbox[0]
+text_height = bbox[3] - bbox[1]
+draw512.text(((512-text_width)/2, (512-text_height)/2), text, fill='white', font=font512)
+img512.save('manifest-server/icon-512.png')
+
+print("Icons created successfully")
+PYSCRIPT
 
           # Create a local web manifest.json for the PWA
           cat > manifest-server/manifest.json <<EOF
