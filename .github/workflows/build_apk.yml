@@ -111,9 +111,29 @@ jobs:
           fi
 
           echo "Building APK with Bubblewrap..."
-          bubblewrap build
+          echo "Current directory contents:"
+          ls -la
+
+          echo "Checking twa-manifest.json signing config..."
+          grep -A5 "signingKey" twa-manifest.json || echo "No signing key found"
+
+          echo "Starting Bubblewrap build..."
+          # Run build with explicit output
+          bubblewrap build --skipInteractions 2>&1 | tee build-output.log
+
+          BUILD_EXIT_CODE=${PIPESTATUS[0]}
+          echo "Build exit code: $BUILD_EXIT_CODE"
+
+          if [ $BUILD_EXIT_CODE -ne 0 ]; then
+            echo "ERROR: Bubblewrap build failed!"
+            echo "Build output:"
+            cat build-output.log
+            exit 1
+          fi
 
           echo "Build complete!"
+          echo "Listing all files:"
+          find . -type f -name "*.apk" -o -name "*.aab"
           ls -lah
 
       - name: List Build Output
