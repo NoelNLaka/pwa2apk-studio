@@ -28,10 +28,6 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK Components
-        run: |
-          sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0"
-
       - name: Accept Android SDK Licenses
         run: yes | sdkmanager --licenses || true
 
@@ -39,7 +35,9 @@ jobs:
         run: |
           echo "ANDROID_HOME: $ANDROID_HOME"
           echo "ANDROID_SDK_ROOT: $ANDROID_SDK_ROOT"
+          echo "Installing Android SDK components..."
           sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0" "cmdline-tools;latest"
+          echo ""
           echo "Installed SDK packages:"
           sdkmanager --list_installed
 
