@@ -12,6 +12,16 @@ const getDomainName = (url: string) => {
   }
 };
 
+// Sanitize package name to be Android-compatible
+// Package names can only contain lowercase letters, numbers, and underscores
+const sanitizePackageName = (name: string): string => {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '_') // Replace invalid chars with underscore
+    .replace(/_{2,}/g, '_')      // Replace multiple underscores with single
+    .replace(/^_|_$/g, '');       // Remove leading/trailing underscores
+};
+
 const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
 
 let ai: GoogleGenAI | null = null;
@@ -27,6 +37,7 @@ export const analyzePwaUrl = async (url: string): Promise<PwaMetadata> => {
   if (!ai) {
     console.warn("Gemini API Key missing. Using fallback metadata.");
     const domain = getDomainName(url);
+    const sanitizedDomain = sanitizePackageName(domain);
     // Simulate network delay
     await new Promise(r => setTimeout(r, 1500));
 
@@ -39,16 +50,17 @@ export const analyzePwaUrl = async (url: string): Promise<PwaMetadata> => {
       display: "standalone",
       orientation: "portrait",
       version: "1.0.0",
-      packageName: `com.${domain}.app`
+      packageName: `com.${sanitizedDomain}.app`
     };
   }
 
   try {
     const response = await ai.models.generateContent({
       model: "gemini-2.0-flash", // Updated to latest stable flash model
-      contents: `Analyze this PWA URL: ${url}. 
-        Based on standard web practices for this specific site, generate metadata for a TWA (Trusted Web Activity) Android application. 
-        Provide a realistic package name based on the domain.`,
+      contents: `Analyze this PWA URL: ${url}.
+        Based on standard web practices for this specific site, generate metadata for a TWA (Trusted Web Activity) Android application.
+        IMPORTANT: The packageName must be a valid Android package name (only lowercase letters, numbers, and underscores - NO hyphens or special characters).
+        Provide a realistic package name based on the domain, replacing any hyphens or special characters with underscores.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -69,11 +81,17 @@ export const analyzePwaUrl = async (url: string): Promise<PwaMetadata> => {
       }
     });
 
-    return JSON.parse(response.text() || "{}");
+    const result = JSON.parse(response.text() || "{}");
+    // Sanitize the package name from Gemini to ensure it's valid
+    if (result.packageName) {
+      result.packageName = sanitizePackageName(result.packageName);
+    }
+    return result;
   } catch (error) {
     console.error("Gemini Analysis Failed:", error);
     // Fallback on error too
     const domain = getDomainName(url);
+    const sanitizedDomain = sanitizePackageName(domain);
     return {
       name: domain.charAt(0).toUpperCase() + domain.slice(1) + " App",
       shortName: domain,
@@ -83,7 +101,7 @@ export const analyzePwaUrl = async (url: string): Promise<PwaMetadata> => {
       display: "standalone",
       orientation: "portrait",
       version: "1.0.0",
-      packageName: `com.${domain}.app`
+      packageName: `com.${sanitizedDomain}.app`
     };
   }
 };
