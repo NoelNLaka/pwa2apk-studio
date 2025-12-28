@@ -1,6 +1,7 @@
 import { PwaMetadata } from "../types";
 
-const GITHUB_API_BASE = "https://api.github.com";
+// Use relative URLs for API calls (will use Vercel serverless functions)
+const API_BASE = "/api";
 
 interface GithubConfig {
     token: string;
@@ -14,27 +15,25 @@ export const triggerGithubBuild = async (
     originalUrl: string
 ): Promise<void> => {
     const response = await fetch(
-        `${GITHUB_API_BASE}/repos/${config.owner}/${config.repo}/dispatches`,
+        `${API_BASE}/trigger-build`,
         {
             method: "POST",
             headers: {
-                Accept: "application/vnd.github.v3+json",
-                Authorization: `token ${config.token}`,
+                "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                event_type: "build-apk",
-                client_payload: {
-                    url: originalUrl,
-                    package_name: metadata.packageName,
-                    name: metadata.name,
-                },
+                token: config.token,
+                owner: config.owner,
+                repo: config.repo,
+                metadata: metadata,
+                url: originalUrl,
             }),
         }
     );
 
     if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Failed to trigger build: ${response.status} ${errorText}`);
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `Failed to trigger build: ${response.status}`);
     }
 };
 
@@ -45,17 +44,17 @@ export const getLatestWorkflowRun = async (
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
     const response = await fetch(
-        `${GITHUB_API_BASE}/repos/${config.owner}/${config.repo}/actions/runs?event=repository_dispatch&per_page=1`,
+        `${API_BASE}/get-workflow-run?token=${encodeURIComponent(config.token)}&owner=${encodeURIComponent(config.owner)}&repo=${encodeURIComponent(config.repo)}`,
         {
             headers: {
-                Accept: "application/vnd.github.v3+json",
-                Authorization: `token ${config.token}`,
+                "Content-Type": "application/json",
             },
         }
     );
 
     if (!response.ok) {
-        throw new Error("Failed to fetch workflow runs");
+        const errorData = await response.json().catch(() => ({ error: 'Failed to fetch workflow runs' }));
+        throw new Error(errorData.error || "Failed to fetch workflow runs");
     }
 
     const data = await response.json();
@@ -67,17 +66,17 @@ export const getArtifactsForRun = async (
     runId: number
 ): Promise<any[]> => {
     const response = await fetch(
-        `${GITHUB_API_BASE}/repos/${config.owner}/${config.repo}/actions/runs/${runId}/artifacts`,
+        `${API_BASE}/get-artifacts?token=${encodeURIComponent(config.token)}&owner=${encodeURIComponent(config.owner)}&repo=${encodeURIComponent(config.repo)}&runId=${runId}`,
         {
             headers: {
-                Accept: "application/vnd.github.v3+json",
-                Authorization: `token ${config.token}`,
+                "Content-Type": "application/json",
             },
         }
     );
 
     if (!response.ok) {
-        throw new Error("Failed to fetch artifacts");
+        const errorData = await response.json().catch(() => ({ error: 'Failed to fetch artifacts' }));
+        throw new Error(errorData.error || "Failed to fetch artifacts");
     }
 
     const data = await response.json();
