@@ -76,27 +76,69 @@ jobs:
           mkdir pwa-project
           cd pwa-project
 
-          bubblewrap init --manifest http://localhost:8080/manifest.json
+          # Generate keystore first (before init)
+          keytool -genkey -v -keystore android.keystore -alias android -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass android -keypass android \
+            -dname "CN=PWA2APK Studio, OU=Development, O=PWA2APK, L=Unknown, ST=Unknown, C=US"
+
+          # Run bubblewrap init with all required parameters to avoid interactive prompts
+          echo "Running bubblewrap init..."
+          yes "" | bubblewrap init --manifest http://localhost:8080/manifest.json || true
 
           # Kill the HTTP server
           kill $SERVER_PID || true
 
-          # Update twa-manifest.json with correct values
-          if [ -f twa-manifest.json ]; then
+          # Check if twa-manifest.json was created
+          if [ ! -f twa-manifest.json ]; then
+            echo "twa-manifest.json not created by init, creating manually..."
+            cat > twa-manifest.json <<TWAEOF
+          {
+            "packageId": "$PACKAGE_NAME",
+            "host": "$PWA_URL",
+            "name": "$APP_NAME",
+            "launcherName": "$APP_NAME",
+            "display": "standalone",
+            "themeColor": "#4f46e5",
+            "navigationColor": "#4f46e5",
+            "backgroundColor": "#ffffff",
+            "enableNotifications": true,
+            "startUrl": "/",
+            "iconUrl": "https://via.placeholder.com/512",
+            "maskableIconUrl": "https://via.placeholder.com/512",
+            "monochromeIconUrl": "https://via.placeholder.com/512",
+            "splashScreenFadeOutDuration": 300,
+            "signingKey": {
+              "path": "./android.keystore",
+              "alias": "android"
+            },
+            "appVersionName": "1.0.0",
+            "appVersionCode": 1,
+            "shortcuts": [],
+            "generatorApp": "pwa2apk-studio",
+            "webManifestUrl": "$PWA_URL/manifest.json",
+            "fallbackType": "customtabs",
+            "features": {},
+            "alphaDependencies": {
+              "enabled": false
+            },
+            "enableSiteSettingsShortcut": true,
+            "isChromeOSOnly": false,
+            "isMetaQuest": false,
+            "minSdkVersion": 19,
+            "targetSdkVersion": 33
+          }
+          TWAEOF
+          else
+            echo "Updating twa-manifest.json..."
             # Update package name and host
             cat twa-manifest.json | \
               sed "s|\"packageId\":.*|\"packageId\": \"$PACKAGE_NAME\",|" | \
               sed "s|\"host\":.*|\"host\": \"$PWA_URL\",|" > twa-manifest.json.tmp
             mv twa-manifest.json.tmp twa-manifest.json
-
-            echo "Updated twa-manifest.json:"
-            cat twa-manifest.json
           fi
 
-          # Generate keystore for signing
-          keytool -genkey -v -keystore android.keystore -alias android -keyalg RSA -keysize 2048 -validity 10000 \
-            -storepass android -keypass android \
-            -dname "CN=PWA2APK Studio, OU=Development, O=PWA2APK, L=Unknown, ST=Unknown, C=US"
+          echo "Final twa-manifest.json:"
+          cat twa-manifest.json
 
           echo "Building APK with Bubblewrap..."
           bubblewrap build
