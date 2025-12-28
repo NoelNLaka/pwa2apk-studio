@@ -35,9 +35,12 @@ jobs:
           echo "Package name: $PACKAGE_NAME"
           echo "App name: $APP_NAME"
 
-          # Create a local web manifest.json for the PWA
-          # This simulates the PWA's manifest since we can't fetch it
+          # Create placeholder icons using ImageMagick
           mkdir -p manifest-server
+          convert -size 192x192 xc:#4f46e5 -gravity center -pointsize 48 -fill white -annotate +0+0 "PWA" manifest-server/icon-192.png
+          convert -size 512x512 xc:#4f46e5 -gravity center -pointsize 128 -fill white -annotate +0+0 "PWA" manifest-server/icon-512.png
+
+          # Create a local web manifest.json for the PWA
           cat > manifest-server/manifest.json <<EOF
           {
             "name": "$APP_NAME",
@@ -61,15 +64,14 @@ jobs:
           }
           EOF
 
-          echo "Created local manifest.json"
-          cat manifest-server/manifest.json
+          echo "Created local manifest.json and icons"
 
-          # Start a simple HTTP server to serve the manifest
+          # Start a simple HTTP server to serve the manifest and icons
           cd manifest-server
           python3 -m http.server 8080 &
           SERVER_PID=$!
           cd ..
-          sleep 2
+          sleep 3
 
           # Initialize Bubblewrap with the local manifest
           echo "Initializing Bubblewrap..."
@@ -88,57 +90,21 @@ jobs:
           # Kill the HTTP server
           kill $SERVER_PID || true
 
-          # Check if twa-manifest.json was created
-          if [ ! -f twa-manifest.json ]; then
-            echo "twa-manifest.json not created by init, creating manually..."
-            cat > twa-manifest.json <<TWAEOF
-          {
-            "packageId": "$PACKAGE_NAME",
-            "host": "$PWA_URL",
-            "name": "$APP_NAME",
-            "launcherName": "$APP_NAME",
-            "display": "standalone",
-            "themeColor": "#4f46e5",
-            "navigationColor": "#4f46e5",
-            "backgroundColor": "#ffffff",
-            "enableNotifications": true,
-            "startUrl": "/",
-            "iconUrl": "https://via.placeholder.com/512",
-            "maskableIconUrl": "https://via.placeholder.com/512",
-            "monochromeIconUrl": "https://via.placeholder.com/512",
-            "splashScreenFadeOutDuration": 300,
-            "signingKey": {
-              "path": "./android.keystore",
-              "alias": "android"
-            },
-            "appVersionName": "1.0.0",
-            "appVersionCode": 1,
-            "shortcuts": [],
-            "generatorApp": "pwa2apk-studio",
-            "webManifestUrl": "$PWA_URL/manifest.json",
-            "fallbackType": "customtabs",
-            "features": {},
-            "alphaDependencies": {
-              "enabled": false
-            },
-            "enableSiteSettingsShortcut": true,
-            "isChromeOSOnly": false,
-            "isMetaQuest": false,
-            "minSdkVersion": 19,
-            "targetSdkVersion": 33
-          }
-          TWAEOF
-          else
+          # Update twa-manifest.json with correct values
+          if [ -f twa-manifest.json ]; then
             echo "Updating twa-manifest.json..."
             # Update package name and host
             cat twa-manifest.json | \
               sed "s|\"packageId\":.*|\"packageId\": \"$PACKAGE_NAME\",|" | \
               sed "s|\"host\":.*|\"host\": \"$PWA_URL\",|" > twa-manifest.json.tmp
             mv twa-manifest.json.tmp twa-manifest.json
-          fi
 
-          echo "Final twa-manifest.json:"
-          cat twa-manifest.json
+            echo "Final twa-manifest.json:"
+            cat twa-manifest.json
+          else
+            echo "ERROR: twa-manifest.json was not created by bubblewrap init"
+            exit 1
+          fi
 
           echo "Building APK with Bubblewrap..."
           bubblewrap build
