@@ -1,0 +1,66 @@
+name: PWA to APK Build
+on:
+  workflow_dispatch:
+    inputs:
+      pwa_url:
+        description: 'The URL of the PWA'
+        required: true
+      app_name:
+        description: 'The Name of the App'
+        required: true
+      package_name:
+        description: 'The Android Package Name (e.g. com.example.app)'
+        required: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Bubblewrap CLI
+        run: npm install -g @bubblewrap/cli
+
+      - name: Initialize and Build TWA
+        run: |
+          mkdir -p build-output
+          cd build-output
+          # Explicitly set paths for Bubblewrap non-interactive mode
+          export BUBBLEWRAP_JDK_PATH=$JAVA_HOME
+          export BUBBLEWRAP_ANDROID_SDK_PATH=$ANDROID_HOME
+          
+          PWA_URL="${{ github.event.inputs.pwa_url }}"
+          [[ "${PWA_URL}" != */ ]] && PWA_URL="${PWA_URL}/"
+          
+          echo "Initializing Bubblewrap..."
+          bubblewrap init --manifest="${PWA_URL}manifest.json" \
+            --metaData='{"packageName":"${{ github.event.inputs.package_name }}","name":"${{ github.event.inputs.app_name }}"}' \
+            --no-prompt
+            
+          echo "Generating Keystore..."
+          keytool -genkey -v -keystore android.keystore -alias android -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass password -keypass password -dname "CN=PWA2APK, OU=Engineering, O=Studio, L=Cloud, S=Internet, C=US"
+            
+          # Update the twa-manifest.json to use our new keystore
+          sed -i 's/"signingKey": {/"signingKey": { "path": "android.keystore", "alias": "android",/' twa-manifest.json
+          
+          echo "Building APK..."
+          bubblewrap build --no-prompt --signingKeyPath=android.keystore --signingKeyAlias=android --signingKeyPassword=password --signingStorePassword=password
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.event.inputs.app_name }}-apk
+          path: build-output/*.apk
