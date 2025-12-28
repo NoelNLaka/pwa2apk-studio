@@ -7,6 +7,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      ANDROID_HOME: /usr/local/lib/android/sdk
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -25,12 +28,16 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK Components
-        run: |
-          sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0"
-
       - name: Accept Android SDK Licenses
         run: yes | sdkmanager --licenses || true
+
+      - name: Install Android SDK Components
+        run: |
+          echo "ANDROID_HOME: $ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT: $ANDROID_SDK_ROOT"
+          sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0" "cmdline-tools;latest"
+          echo "Installed SDK packages:"
+          sdkmanager --list_installed
 
       - name: Install Bubblewrap
         run: npm install -g @bubblewrap/cli
@@ -128,7 +135,18 @@ jobs:
           grep -A5 "signingKey" twa-manifest.json || echo "No signing key found"
 
           echo "Starting Bubblewrap build..."
-          # Run build with explicit output
+          echo "ANDROID_HOME: $ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT: $ANDROID_SDK_ROOT"
+          echo "Java version:"
+          java -version
+
+          # Ensure Gradle wrapper has execute permissions if it exists
+          if [ -f "app/gradlew" ]; then
+            echo "Setting Gradle wrapper permissions..."
+            chmod +x app/gradlew
+          fi
+
+          # Run build with explicit output and verbose Gradle logging
           bubblewrap build --skipInteractions 2>&1 | tee build-output.log
 
           BUILD_EXIT_CODE=${PIPESTATUS[0]}
@@ -138,6 +156,14 @@ jobs:
             echo "ERROR: Bubblewrap build failed!"
             echo "Build output:"
             cat build-output.log
+
+            echo ""
+            echo "Checking for Gradle build directory..."
+            if [ -d "app" ]; then
+              echo "Found app directory, checking for Gradle logs..."
+              find app -name "*.log" -type f -exec echo "=== {} ===" \; -exec cat {} \;
+            fi
+
             exit 1
           fi
 
