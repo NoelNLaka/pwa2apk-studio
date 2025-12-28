@@ -26,22 +26,71 @@ jobs:
         run: npm install -g @bubblewrap/cli
 
       - name: Initialize and Build TWA
+        env:
+          PWA_URL: ${{ github.event.client_payload.url }}
+          PACKAGE_NAME: ${{ github.event.client_payload.package_name }}
+          APP_NAME: ${{ github.event.client_payload.name }}
         run: |
           mkdir pwa-project
           cd pwa-project
 
-          echo "Initializing TWA for URL: ${{ github.event.client_payload.url }}"
+          echo "Initializing TWA for URL: $PWA_URL"
+          echo "Package name: $PACKAGE_NAME"
+          echo "App name: $APP_NAME"
 
-          # Initialize project using the provided URL
-          # Use --url flag to specify the PWA URL (not --manifest)
-          bubblewrap init --url "${{ github.event.client_payload.url }}" || {
-            echo "Bubblewrap init failed. Trying with manifest detection..."
-            bubblewrap init --manifest "${{ github.event.client_payload.url }}/manifest.json"
+          # Create a basic twa-manifest.json file
+          # This avoids needing to fetch from the PWA (which may be blocked)
+          cat > twa-manifest.json <<EOF
+          {
+            "packageId": "$PACKAGE_NAME",
+            "host": "$PWA_URL",
+            "name": "$APP_NAME",
+            "launcherName": "$APP_NAME",
+            "display": "standalone",
+            "themeColor": "#4f46e5",
+            "navigationColor": "#4f46e5",
+            "backgroundColor": "#ffffff",
+            "enableNotifications": true,
+            "startUrl": "/",
+            "iconUrl": "$PWA_URL/icon.png",
+            "maskableIconUrl": "$PWA_URL/icon.png",
+            "monochromeIconUrl": "$PWA_URL/icon.png",
+            "splashScreenFadeOutDuration": 300,
+            "signingKey": {
+              "path": "./android.keystore",
+              "alias": "android"
+            },
+            "appVersionName": "1.0.0",
+            "appVersionCode": 1,
+            "shortcuts": [],
+            "generatorApp": "pwa2apk-studio",
+            "webManifestUrl": "$PWA_URL/manifest.json",
+            "fallbackType": "customtabs",
+            "features": {},
+            "alphaDependencies": {
+              "enabled": false
+            },
+            "enableSiteSettingsShortcut": true,
+            "isChromeOSOnly": false,
+            "isMetaQuest": false,
+            "minSdkVersion": 19,
+            "targetSdkVersion": 33
           }
+          EOF
 
-          echo "Building APK..."
-          # Build the APK
-          bubblewrap build
+          echo "Generated twa-manifest.json"
+          cat twa-manifest.json
+
+          # Generate keystore for signing
+          keytool -genkey -v -keystore android.keystore -alias android -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass android -keypass android \
+            -dname "CN=PWA2APK Studio, OU=Development, O=PWA2APK, L=Unknown, ST=Unknown, C=US"
+
+          echo "Building APK with Bubblewrap..."
+          bubblewrap build --skipInteractions
+
+          echo "Build complete!"
+          ls -lah
 
       - name: List Build Output
         run: |
@@ -54,7 +103,7 @@ jobs:
         with:
           name: app-release
           path: |
-            pwa-project/**/*.apk
-            pwa-project/app-release-signed.apk
+            pwa-project/app/build/outputs/apk/**/*.apk
+            pwa-project/*.apk
           retention-days: 1
           if-no-files-found: warn
