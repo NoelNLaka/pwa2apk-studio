@@ -148,6 +148,19 @@ jobs:
             chmod +x app/gradlew
           fi
 
+          # Create gradle.properties to configure build settings
+          mkdir -p ~/.gradle
+          cat > ~/.gradle/gradle.properties <<GRADLE_PROPS
+          org.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m
+          org.gradle.parallel=false
+          org.gradle.daemon=false
+          android.useAndroidX=true
+          android.enableJetifier=true
+          GRADLE_PROPS
+
+          echo "Gradle properties configured"
+          cat ~/.gradle/gradle.properties
+
           # Run build with explicit output and verbose Gradle logging
           bubblewrap build --skipInteractions 2>&1 | tee build-output.log
 
@@ -155,16 +168,33 @@ jobs:
           echo "Build exit code: $BUILD_EXIT_CODE"
 
           if [ $BUILD_EXIT_CODE -ne 0 ]; then
+            echo "============================================"
             echo "ERROR: Bubblewrap build failed!"
-            echo "Build output:"
+            echo "============================================"
+
+            echo ""
+            echo "=== BUILD OUTPUT LOG ==="
             cat build-output.log
 
             echo ""
-            echo "Checking for Gradle build directory..."
+            echo "=== DIRECTORY STRUCTURE ==="
+            ls -R app 2>/dev/null || echo "No app directory found"
+
+            echo ""
+            echo "=== GRADLE LOGS ==="
             if [ -d "app" ]; then
-              echo "Found app directory, checking for Gradle logs..."
-              find app -name "*.log" -type f -exec echo "=== {} ===" \; -exec cat {} \;
+              find app -name "*.log" -type f -exec echo "--- {} ---" \; -exec cat {} \; 2>/dev/null || echo "No Gradle log files found"
             fi
+
+            echo ""
+            echo "=== GRADLE BUILD OUTPUT ==="
+            if [ -d "app/build" ]; then
+              find app/build/outputs -type f 2>/dev/null || echo "No build outputs found"
+            fi
+
+            echo ""
+            echo "=== LAST 200 LINES OF BUILD OUTPUT ==="
+            tail -200 build-output.log
 
             exit 1
           fi
